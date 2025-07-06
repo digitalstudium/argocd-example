@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: helm-charts-applicationset
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - matrix:
+      generators:
+      - git:
+          repoURL: https://github.com/digitalstudium/argocd-example.git
+          revision: HEAD
+          files:
+          - path: clusters/*/namespaces/*/charts/*/*/metadata.yaml
+      - clusters:
+          flatList: true          
+  template:
+    metadata:
+      name: "{{index .path.segments 1}}-{{index .path.segments 3}}-{{index .path.segments 5}}-{{index .path.segments 6}}"
+    spec:
+      project: default
+      sources:
+      - repoURL: '{{.repoUrl}}'
+        chart: '{{index .path.segments 5}}'
+        targetRevision: '{{.version}}'
+        helm:
+          valueFiles:
+          - $values/{{.path.path}}/values.yaml
+      - repoURL: https://github.com/digitalstudium/argocd-example.git
+        targetRevision: HEAD
+        ref: values
+      destination:
+        server: '{{range .clusters}}{{if eq .name (index $.path.segments 1)}}{{.server}}{{end}}{{end}}'
+        namespace: '{{index .path.segments 3}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
